@@ -46,6 +46,9 @@ app.use('/api/v1', apiRoutes);
 app.post('/api/process', uploadVideo.single('file'), asyncHandler(JobsController.createJob));
 app.get('/api/status/:id', asyncHandler(JobsController.getJobLegacy));
 app.get('/api/config', (req, res) => res.json({ billing_enabled: false, version: '1.0.0' }));
+app.get('/api/clip/:jobId/:clipIndex/transcript', asyncHandler(JobsController.getClipTranscript));
+app.post('/api/subtitle', asyncHandler(JobsController.handleSubtitle));
+app.post('/api/subtitle/remove', asyncHandler(JobsController.handleSubtitle));
 
 // 6. 404 Handler for undefined routes
 app.use((req, res, next) => {

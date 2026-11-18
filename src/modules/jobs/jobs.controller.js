@@ -97,5 +97,40 @@ export class JobsController {
 
     return res.sendFile(clipPath);
   }
+
+  /**
+   * Get word-level captions/transcript for a specific clip
+   */
+  static async getClipTranscript(req, res) {
+    const { jobId, clipIndex } = req.params;
+    const job = JobsService.getJobById(jobId);
+    const idx = parseInt(clipIndex, 10);
+    const clip = job.clips?.[idx];
+    if (!clip) {
+      throw new AppError('Clip not found', 404, 'CLIP_NOT_FOUND');
+    }
+    return res.status(200).json({
+      captions: clip.captions || [],
+      durationSec: clip.duration || 30,
+      text: (clip.captions || []).map((c) => c.text).join(' '),
+    });
+  }
+
+  /**
+   * Subtitle compatibility handler
+   */
+  static async handleSubtitle(req, res) {
+    const { job_id, clip_index } = req.body;
+    const job = JobsService.getJobById(job_id);
+    const idx = parseInt(clip_index, 10);
+    const clip = job.clips?.[idx];
+    if (!clip) {
+      throw new AppError('Clip not found', 404, 'CLIP_NOT_FOUND');
+    }
+    return res.status(200).json({
+      success: true,
+      new_video_url: clip.video_url,
+    });
+  }
 }
 

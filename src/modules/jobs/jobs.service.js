@@ -121,6 +121,23 @@ export class JobsService {
         { hook: moment.hook }
       );
 
+      // Normalize caption timestamps so they start at 0s relative to the clip
+      const clipStartMs = Math.round(moment.start * 1000);
+      const rawCaptions = moment.captions || [];
+      const normalizedCaptions = rawCaptions.map((c) => {
+        let s = Number(c.startMs) || 0;
+        let e = Number(c.endMs) || 0;
+        if (s >= clipStartMs) {
+          s -= clipStartMs;
+          e -= clipStartMs;
+        }
+        return {
+          text: c.text,
+          startMs: Math.max(0, Math.round(s)),
+          endMs: Math.max(0, Math.round(e)),
+        };
+      });
+
       const filename = path.basename(clipOutputPath);
       finalClips.push({
         id: uuidv4(),
@@ -133,7 +150,7 @@ export class JobsService {
         duration: Math.round(moment.end - moment.start),
         video_url: `/videos/${jobId}/${filename}`,
         videoUrl: `/videos/${jobId}/${filename}`,
-        captions: moment.captions || [],
+        captions: normalizedCaptions,
       });
     }
 
