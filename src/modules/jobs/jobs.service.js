@@ -116,12 +116,15 @@ export class JobsService {
 
     const renderMoment = async (moment, index) => {
       jobRepository.addLog(jobId, `[Rendering] Clip ${index + 1}/${detectedMoments.length}: "${moment.title}"`);
+      const fgHeight = probe.width && probe.height ? Math.round(1080 * (probe.height / probe.width)) : 608;
+      const videoTop = Math.max(0, Math.round((1920 - fgHeight) / 2));
+
       const clipOutputPath = await RenderService.renderVerticalClip(
         localVideoPath,
         moment.start,
         moment.end,
         jobDir,
-        { hook: moment.hook, title: moment.title }
+        { hook: moment.hook, title: moment.title, videoTop }
       );
 
       // Normalize caption timestamps so they start at 0s relative to the clip

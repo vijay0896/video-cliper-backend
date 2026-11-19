@@ -8,8 +8,9 @@ import { AppError } from '../../core/utils/appError.js';
 export class RenderService {
   /**
    * Helper: Generate a high-contrast SVG banner for the overall clip context / hook
+   * Positioned just above the center video frame for optimal reel readability.
    */
-  static generateHookSvg(hookText, svgPath) {
+  static generateHookSvg(hookText, svgPath, videoTop = 656) {
     const cleanText = (hookText || '')
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
@@ -21,6 +22,10 @@ export class RenderService {
     const boxWidth = Math.min(1000, Math.max(450, textLength * 30 + 100));
     const boxX = (1080 - boxWidth) / 2;
 
+    // Position pill nicely just above the video frame (with 36px breathing room)
+    const pillY = videoTop > 200 ? Math.round(videoTop - 110 - 36) : 140;
+    const textY = pillY + 74;
+
     const svgContent = `<?xml version="1.0" encoding="UTF-8"?>
 <svg width="1080" height="1920" viewBox="0 0 1080 1920" xmlns="http://www.w3.org/2000/svg">
   <defs>
@@ -28,9 +33,9 @@ export class RenderService {
       <feDropShadow dx="0" dy="6" stdDeviation="12" flood-color="#000000" flood-opacity="0.85"/>
     </filter>
   </defs>
-  <!-- Modern Translucent Context Pill at Top -->
-  <rect x="${boxX}" y="140" width="${boxWidth}" height="110" rx="36" ry="36" fill="rgba(0, 0, 0, 0.78)" stroke="rgba(255, 255, 255, 0.22)" stroke-width="3" filter="url(#shadow)" />
-  <text x="540" y="214" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="46" fill="#FFFFFF" text-anchor="middle" letter-spacing="1">
+  <!-- Modern Translucent Context Pill placed just above the video -->
+  <rect x="${boxX}" y="${pillY}" width="${boxWidth}" height="110" rx="36" ry="36" fill="rgba(0, 0, 0, 0.78)" stroke="rgba(255, 255, 255, 0.22)" stroke-width="3" filter="url(#shadow)" />
+  <text x="540" y="${textY}" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="46" fill="#FFFFFF" text-anchor="middle" letter-spacing="1">
     ${cleanText}
   </text>
 </svg>`;
@@ -86,7 +91,7 @@ export class RenderService {
     if (hookText && typeof hookText === 'string' && hookText.trim()) {
       try {
         hookSvgPath = path.join(outputDir, `hook_${clipId}.svg`);
-        RenderService.generateHookSvg(hookText.trim(), hookSvgPath);
+        RenderService.generateHookSvg(hookText.trim(), hookSvgPath, options.videoTop);
         hookPngPath = await RenderService.rasterizeSvg(hookSvgPath);
       } catch (e) {
         logger.warn(`[RenderService] Hook overlay generation skipped: ${e.message}`);
