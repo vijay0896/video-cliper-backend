@@ -54,7 +54,7 @@ Respond ONLY with a valid JSON array of clip objects matching this schema:
     "start": 12.5,
     "end": 45.0,
     "title": "Catchy YouTube Shorts Title",
-    "hook": "Short bold opening text overlay (max 6 words)",
+    "hook": "Punchy overall context text for this clip (3 to 6 words with 1 relevant emoji, e.g. 'First shark attack 💀', 'Bro thought he was safe 😂', 'The $10M mistake 💸', 'Never do this in public ❌'). This text is overlaid at the top of the video so viewers immediately understand the context of the reel.",
     "score": 9.2,
     "reason": "Why this moment will perform well on social media",
     "captions": [
