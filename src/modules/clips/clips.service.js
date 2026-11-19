@@ -32,6 +32,7 @@ export class ClipsService {
       // 1. Read audio buffer and convert to base64
       const audioBuffer = fs.readFileSync(audioFilePath);
       const audioBase64 = audioBuffer.toString('base64');
+      const audioMimeType = audioFilePath.endsWith('.mp3') ? 'audio/mp3' : 'audio/wav';
 
       const targetClips = options.target_clips || 3;
       const minSeconds = options.clip_min_seconds || 15;
@@ -91,7 +92,7 @@ Do not wrap in markdown or backticks. Return raw JSON array only.
                   parts: [
                     {
                       inlineData: {
-                        mimeType: 'audio/wav',
+                        mimeType: audioMimeType,
                         data: audioBase64,
                       },
                     },

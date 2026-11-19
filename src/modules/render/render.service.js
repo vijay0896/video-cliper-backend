@@ -60,7 +60,7 @@ export class RenderService {
   }
 
   /**
-   * Cut and render a 9:16 vertical clip with blurred background and optional context hook overlay
+   * Cut and render a 9:16 vertical clip with hardware acceleration and optimized background blur
    * @param {string} sourceVideoPath - Input source video
    * @param {number} startSec - Start timestamp in seconds
    * @param {number} endSec - End timestamp in seconds
@@ -93,6 +93,7 @@ export class RenderService {
       }
     }
 
+    // High performance background blur: downscaling to 270x480 before blur runs 16x faster
     let filterGraph;
     const ffmpegArgs = [
       '-y',
@@ -103,28 +104,31 @@ export class RenderService {
 
     if (hookPngPath && fs.existsSync(hookPngPath)) {
       ffmpegArgs.push('-i', hookPngPath);
-      // 1. bg: blur, 2. fg: scaled video, 3. overlay fg on bg, 4. overlay hook text banner at y=0 (with full alpha)
       filterGraph = [
-        `[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=25:5[bg]`,
+        `[0:v]scale=270:480,boxblur=10:2,scale=1080:1920[bg]`,
         `[0:v]scale=1080:-2[fg]`,
         `[bg][fg]overlay=(W-w)/2:(H-h)/2[base]`,
         `[base][1:v]overlay=0:0[outv]`,
       ].join(';');
     } else {
       filterGraph = [
-        `[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=25:5[bg]`,
+        `[0:v]scale=270:480,boxblur=10:2,scale=1080:1920[bg]`,
         `[0:v]scale=1080:-2[fg]`,
         `[bg][fg]overlay=(W-w)/2:(H-h)/2[outv]`,
       ].join(';');
+    }
+
+    // Hardware accelerated video encoding on Apple Silicon (VideoToolbox) or software fallback
+    let encoderArgs = ['-c:v', 'libx264', '-preset', 'fast', '-crf', '22'];
+    if (process.platform === 'darwin') {
+      encoderArgs = ['-c:v', 'h264_videotoolbox', '-b:v', '4500k'];
     }
 
     ffmpegArgs.push(
       '-filter_complex', filterGraph,
       '-map', '[outv]',
       '-map', '0:a?',
-      '-c:v', 'libx264',
-      '-preset', 'fast',
-      '-crf', '22',
+      ...encoderArgs,
       '-c:a', 'aac',
       '-b:a', '192k',
       '-movflags', '+faststart',
@@ -133,7 +137,7 @@ export class RenderService {
 
     try {
       await execa('ffmpeg', ffmpegArgs);
-      logger.info(`[RenderService] Successfully rendered clip with hook at: ${outputPath}`);
+      logger.info(`[RenderService] Successfully rendered clip at: ${outputPath}`);
       return outputPath;
     } catch (err) {
       logger.error(`[RenderService] FFmpeg rendering error: ${err.message}`);

@@ -127,22 +127,28 @@ export class MediaService {
   }
 
   /**
-   * Extract audio from video to 16kHz mono WAV for transcription
+   * Extract audio from video for speech analysis
+   * Supports 64kbps mono MP3 (for 4x faster Gemini uploads) or 16kHz mono WAV
    * @param {string} videoPath
    * @param {string} outputAudioPath
    */
   static async extractAudio(videoPath, outputAudioPath) {
     logger.info(`[MediaService] Extracting audio from ${videoPath} to ${outputAudioPath}`);
     try {
-      await execa('ffmpeg', [
+      const isMp3 = outputAudioPath.endsWith('.mp3');
+      const ffmpegArgs = [
         '-y',
         '-i', videoPath,
         '-vn',
-        '-acodec', 'pcm_s16le',
-        '-ar', '16000',
-        '-ac', '1',
-        outputAudioPath,
-      ]);
+      ];
+
+      if (isMp3) {
+        ffmpegArgs.push('-c:a', 'libmp3lame', '-b:a', '64k', '-ar', '16000', '-ac', '1', outputAudioPath);
+      } else {
+        ffmpegArgs.push('-acodec', 'pcm_s16le', '-ar', '16000', '-ac', '1', outputAudioPath);
+      }
+
+      await execa('ffmpeg', ffmpegArgs);
       return outputAudioPath;
     } catch (err) {
       logger.error(`[MediaService] ffmpeg audio extraction error: ${err.message}`);

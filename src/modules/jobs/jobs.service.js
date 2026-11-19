@@ -92,10 +92,10 @@ export class JobsService {
     });
     jobRepository.addLog(jobId, `Video probed: ${probe.width}x${probe.height}, ${duration.toFixed(1)}s`);
 
-    // 3. Audio Extraction
-    jobRepository.addLog(jobId, 'Extracting audio for speech analysis...');
+    // 3. Audio Extraction (Fast 64k mono MP3 for 4x faster Gemini ingestion)
+    jobRepository.addLog(jobId, 'Extracting compressed audio for speech analysis...');
     jobRepository.update(jobId, { progress: 45 });
-    const audioPath = path.join(jobDir, 'audio.wav');
+    const audioPath = path.join(jobDir, 'audio.mp3');
     await MediaService.extractAudio(localVideoPath, audioPath);
 
     // 4. Gemini AI Moment Detection
@@ -104,21 +104,21 @@ export class JobsService {
     const detectedMoments = await ClipsService.analyzeAndPickMoments(audioPath, duration, options, customApiKey);
     jobRepository.addLog(jobId, `Gemini found ${detectedMoments.length} viral moment candidate(s)`);
 
-    // 5. Render Vertical 9:16 Clips
-    jobRepository.addLog(jobId, 'Rendering 9:16 vertical video clips...');
-    jobRepository.update(jobId, { progress: 75 });
-    const finalClips = [];
+    // 5. Render Vertical 9:16 Clips with Parallel Hardware Concurrency
+    jobRepository.addLog(jobId, `Rendering ${detectedMoments.length} vertical clips (Hardware Accelerated)...`);
+    jobRepository.update(jobId, { progress: 70 });
 
-    for (let i = 0; i < detectedMoments.length; i++) {
-      const moment = detectedMoments[i];
-      jobRepository.addLog(jobId, `Rendering clip ${i + 1}/${detectedMoments.length}: "${moment.title}"`);
+    const CONCURRENCY = 3; // 3 concurrent renders on Apple Silicon M1
+    let completedCount = 0;
 
+    const renderMoment = async (moment, index) => {
+      jobRepository.addLog(jobId, `[Rendering] Clip ${index + 1}/${detectedMoments.length}: "${moment.title}"`);
       const clipOutputPath = await RenderService.renderVerticalClip(
         localVideoPath,
         moment.start,
         moment.end,
         jobDir,
-        { hook: moment.hook }
+        { hook: moment.hook, title: moment.title }
       );
 
       // Normalize caption timestamps so they start at 0s relative to the clip
@@ -138,9 +138,14 @@ export class JobsService {
         };
       });
 
+      completedCount++;
+      const currentProgress = 70 + Math.round((completedCount / detectedMoments.length) * 28);
+      jobRepository.update(jobId, { progress: currentProgress });
+
       const filename = path.basename(clipOutputPath);
-      finalClips.push({
+      return {
         id: uuidv4(),
+        index,
         title: moment.title,
         hook: moment.hook,
         score: moment.score,
@@ -151,8 +156,28 @@ export class JobsService {
         video_url: `/videos/${jobId}/${filename}`,
         videoUrl: `/videos/${jobId}/${filename}`,
         captions: normalizedCaptions,
+      };
+    };
+
+    // Parallel Worker Pool
+    const results = [];
+    const pool = [];
+
+    for (let i = 0; i < detectedMoments.length; i++) {
+      const task = renderMoment(detectedMoments[i], i).then((clip) => {
+        results.push(clip);
+        pool.splice(pool.indexOf(task), 1);
       });
+      pool.push(task);
+      if (pool.length >= CONCURRENCY) {
+        await Promise.race(pool);
+      }
     }
+    await Promise.all(pool);
+
+    // Keep clips in original chronological order
+    results.sort((a, b) => a.index - b.index);
+    const finalClips = results.map(({ index, ...clip }) => clip);
 
     // 6. Complete
     jobRepository.update(jobId, {
