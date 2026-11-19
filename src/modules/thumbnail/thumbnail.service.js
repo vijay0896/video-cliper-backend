@@ -5,7 +5,9 @@ import { execa } from 'execa';
 import { GoogleGenAI } from '@google/genai';
 import { env } from '../../config/env.js';
 import { logger } from '../../config/logger.js';
+import { AI_CONFIG } from '../../config/ai.js';
 import { AppError } from '../../core/utils/appError.js';
+import { parseLlmJson } from '../../core/utils/jsonParser.js';
 import { MediaService } from '../media/media.service.js';
 
 export class ThumbnailService {
@@ -155,16 +157,9 @@ Respond ONLY with valid JSON matching this schema:
 }
 `;
 
-    const candidateModels = [
-      env.GEMINI_MODEL,
-      'gemini-3.1-flash-lite',
-      'gemini-3.6-flash',
-      'gemini-3.5-flash',
-    ].filter(Boolean);
-
     let responseText = null;
 
-    for (const model of [...new Set(candidateModels)]) {
+    for (const model of AI_CONFIG.CANDIDATE_MODELS) {
       try {
         const res = await ai.models.generateContent({
           model,
@@ -179,15 +174,7 @@ Respond ONLY with valid JSON matching this schema:
       }
     }
 
-    let parsed = null;
-    if (responseText) {
-      try {
-        let cleaned = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
-        const match = cleaned.match(/\{[\s\S]*\}/);
-        if (match) cleaned = match[0];
-        parsed = JSON.parse(cleaned);
-      } catch (_) {}
-    }
+    let parsed = parseLlmJson(responseText, null);
 
     if (!parsed || !Array.isArray(parsed.titles) || parsed.titles.length === 0) {
       parsed = {
@@ -293,15 +280,7 @@ Respond ONLY with valid JSON:
       logger.warn(`[ThumbnailService] refine error: ${e.message}`);
     }
 
-    let parsed = null;
-    if (responseText) {
-      try {
-        let cleaned = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
-        const match = cleaned.match(/\{[\s\S]*\}/);
-        if (match) cleaned = match[0];
-        parsed = JSON.parse(cleaned);
-      } catch (_) {}
-    }
+    let parsed = parseLlmJson(responseText, null);
 
     const newTitles = parsed?.titles || [
       `${message}: Top Reveal`,
