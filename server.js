@@ -1,6 +1,24 @@
+/**
+ * @file server.js
+ * @description Application Entrypoint & Process Lifecycle Manager
+ * Bootstraps runtime directories, binds HTTP listener, and manages graceful shutdowns.
+ */
+import fs from 'fs';
+import path from 'path';
 import app from './app.js';
 import { env } from './src/config/env.js';
 import { logger } from './src/config/logger.js';
+
+// Ensure critical runtime directories exist before accepting traffic
+[
+  env.OUTPUT_DIR,
+  env.UPLOAD_DIR,
+  path.join(env.OUTPUT_DIR, 'thumbnails'),
+].forEach((dir) => {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+});
 
 const PORT = env.PORT || 8000;
 
@@ -42,4 +60,3 @@ process.on('uncaughtException', (err) => {
 process.on('unhandledRejection', (reason) => {
   logger.error('Unhandled Rejection:', { reason });
 });
-
