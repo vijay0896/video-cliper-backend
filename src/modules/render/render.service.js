@@ -18,7 +18,7 @@ export class RenderService {
       .replace(/'/g, '&apos;');
 
     const textLength = cleanText.length;
-    const boxWidth = Math.min(1000, Math.max(460, textLength * 30 + 100));
+    const boxWidth = Math.min(1000, Math.max(450, textLength * 30 + 100));
     const boxX = (1080 - boxWidth) / 2;
 
     const svgContent = `<?xml version="1.0" encoding="UTF-8"?>
@@ -40,19 +40,21 @@ export class RenderService {
   }
 
   /**
-   * Rasterize SVG to 1080x1920 PNG using macOS qlmanage + sips
+   * Rasterize SVG to 1080x1920 PNG with true alpha transparency using rsvg-convert
    */
   static async rasterizeSvg(svgPath) {
     try {
-      const dir = path.dirname(svgPath);
-      await execa('qlmanage', ['-t', '-s', '1920', '-o', dir, svgPath]);
       const pngPath = `${svgPath}.png`;
+      const rsvgBin = fs.existsSync('/opt/homebrew/bin/rsvg-convert')
+        ? '/opt/homebrew/bin/rsvg-convert'
+        : 'rsvg-convert';
+
+      await execa(rsvgBin, ['-w', '1080', '-h', '1920', svgPath, '-o', pngPath]);
       if (fs.existsSync(pngPath)) {
-        await execa('sips', ['--cropToHeightWidth', '1920', '1080', pngPath]);
         return pngPath;
       }
     } catch (e) {
-      logger.warn(`[RenderService] Could not rasterize hook SVG via qlmanage: ${e.message}`);
+      logger.warn(`[RenderService] Could not rasterize hook SVG via rsvg-convert: ${e.message}`);
     }
     return null;
   }
@@ -77,7 +79,7 @@ export class RenderService {
 
     logger.info(`[RenderService] Rendering 9:16 vertical clip: ${startSec}s to ${endSec}s (${duration.toFixed(1)}s)`);
 
-    // Generate hook context overlay if provided
+    // Generate hook context overlay if provided and rasterizer succeeds
     let hookPngPath = null;
     let hookSvgPath = null;
     const hookText = options.hook || options.title;
@@ -101,7 +103,7 @@ export class RenderService {
 
     if (hookPngPath && fs.existsSync(hookPngPath)) {
       ffmpegArgs.push('-i', hookPngPath);
-      // 1. bg: blur, 2. fg: scaled video, 3. overlay fg on bg, 4. overlay hook text banner at y=0
+      // 1. bg: blur, 2. fg: scaled video, 3. overlay fg on bg, 4. overlay hook text banner at y=0 (with full alpha)
       filterGraph = [
         `[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=25:5[bg]`,
         `[0:v]scale=1080:-2[fg]`,
