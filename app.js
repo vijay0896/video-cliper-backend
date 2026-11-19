@@ -38,6 +38,9 @@ if (env.NODE_ENV !== 'test') {
 app.use('/output', express.static(env.OUTPUT_DIR));
 app.use('/videos', express.static(env.OUTPUT_DIR));
 app.use('/thumbnails', express.static(path.join(env.OUTPUT_DIR, 'thumbnails')));
+app.get(['/thumbnails', '/thumbnails/'], (req, res) => {
+  res.json({ success: true, message: 'Thumbnails static endpoint' });
+});
 app.use('/uploads', express.static(env.UPLOAD_DIR));
 
 // 5. Mount API Routes

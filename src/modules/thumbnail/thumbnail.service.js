@@ -62,7 +62,10 @@ export class ThumbnailService {
 
         if (fs.existsSync(framePath)) {
           const sessionName = path.basename(sessionDir);
-          frames.push(`/thumbnails/${sessionName}/${frameFilename}`);
+          frames.push({
+            url: `/thumbnails/${sessionName}/${frameFilename}`,
+            time: Number(time),
+          });
         }
       }
     } catch (err) {
@@ -328,7 +331,10 @@ Respond ONLY with valid JSON:
       const sessionDir = this.getSessionDir(sessionId);
       const existing = fs.readdirSync(sessionDir).filter((f) => f.startsWith('frame_'));
       return {
-        frames: existing.map((f) => `/thumbnails/${sessionId}/${f}`),
+        frames: existing.map((f, i) => ({
+          url: `/thumbnails/${sessionId}/${f}`,
+          time: i * 5,
+        })),
       };
     }
 
@@ -465,7 +471,12 @@ Respond ONLY with valid JSON:
       }
 
       if (fs.existsSync(outPath)) {
-        generatedThumbnails.push(`/thumbnails/${sessionId}/${outFilename}`);
+        generatedThumbnails.push({
+          url: `/thumbnails/${sessionId}/${outFilename}`,
+          text: variantText,
+          why: i === 1 ? 'Bold focal text with optimal CTR' : 'High engagement curiosity hook',
+          fallback: false,
+        });
       }
     }
 
