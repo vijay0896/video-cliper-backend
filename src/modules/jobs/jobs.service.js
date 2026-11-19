@@ -70,14 +70,17 @@ export class JobsService {
       jobRepository.addLog(jobId, `Downloading video from YouTube: ${url}`);
       jobRepository.update(jobId, { progress: 20 });
 
-      const downloadResult = await MediaService.downloadYouTube(url, jobDir, options);
+      const addJobLog = (msg) => {
+        logger.info(`[JobsService] [Job ${jobId}] ${msg}`);
+        jobRepository.addLog(jobId, msg);
+      };
+
+      const downloadResult = await MediaService.downloadYouTube(url, jobDir, options, addJobLog);
       localVideoPath = downloadResult.filePath;
       videoTitle = downloadResult.title;
       duration = downloadResult.duration;
 
-      if (downloadResult.isLive) {
-        jobRepository.addLog(jobId, `🔴 Live Stream detected! Successfully captured ${duration}s stream segment.`);
-      } else {
+      if (!downloadResult.isLive) {
         jobRepository.addLog(jobId, `Download complete: "${videoTitle}"`);
       }
     }

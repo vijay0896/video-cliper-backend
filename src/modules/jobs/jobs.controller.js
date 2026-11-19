@@ -18,7 +18,7 @@ export class JobsController {
       target_clips: req.body.targetClips || req.body.target_clips ? parseInt(req.body.targetClips || req.body.target_clips, 10) : 3,
       clip_min_seconds: req.body.clipMinSeconds || req.body.clip_min_seconds ? parseInt(req.body.clipMinSeconds || req.body.clip_min_seconds, 10) : 15,
       clip_max_seconds: req.body.clipMaxSeconds || req.body.clip_max_seconds ? parseInt(req.body.clipMaxSeconds || req.body.clip_max_seconds, 10) : 60,
-      live_capture_seconds: req.body.live_capture_seconds || req.body.liveCaptureSeconds ? parseInt(req.body.live_capture_seconds || req.body.liveCaptureSeconds, 10) : 300,
+      live_capture_seconds: req.body.live_capture_seconds || req.body.liveCaptureSeconds ? parseInt(req.body.live_capture_seconds || req.body.liveCaptureSeconds, 10) : 60,
       max_minutes: req.body.max_minutes ? parseInt(req.body.max_minutes, 10) : null,
     };
 

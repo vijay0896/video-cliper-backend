@@ -17,9 +17,10 @@ export class MediaService {
    * @param {string} url - YouTube URL
    * @param {string} outputDir - Directory to save downloaded file
    * @param {object} [options] - Ingestion options
+   * @param {function} [onLog] - Real-time status update callback
    * @returns {Promise<{ filePath: string, title: string, duration: number, isLive?: boolean }>}
    */
-  static async downloadYouTube(url, outputDir, options = {}) {
+  static async downloadYouTube(url, outputDir, options = {}, onLog = null) {
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
     }
@@ -28,6 +29,7 @@ export class MediaService {
     const outputTemplate = path.join(outputDir, `${fileId}.%(ext)s`);
 
     logger.info(`[MediaService] Starting YouTube download for URL: ${url}`);
+    if (onLog) onLog('Connecting to YouTube and analyzing stream metadata...');
 
     try {
       // 1. Get metadata first
@@ -42,16 +44,27 @@ export class MediaService {
 
       // 2. Handle Active Live Stream Capture
       if (isLive) {
-        const captureSec = options.live_capture_seconds || (options.max_minutes ? options.max_minutes * 60 : 300);
-        logger.info(`[MediaService] Active LIVE STREAM detected: "${metadata.title}". Capturing ${captureSec}s slice...`);
+        const captureSec = options.live_capture_seconds || options.liveCaptureSeconds || (options.max_minutes ? options.max_minutes * 60 : 60);
+        logger.info(`[MediaService] Active LIVE STREAM detected: "${metadata.title}". Capturing fast ${captureSec}s slice...`);
+        if (onLog) {
+          onLog(`🔴 Live stream detected: "${metadata.title}". Fast-capturing ${captureSec}s stream slice...`);
+        }
 
         const liveFilePath = path.join(outputDir, `${fileId}.mp4`);
         await execa('yt-dlp', [
           '--no-playlist',
+          '--no-live-from-start',
+          '--hls-use-mpegts',
+          '--concurrent-fragments', '5',
+          '--socket-timeout', '10',
           '--download-sections', `*0-${captureSec}`,
           '-o', liveFilePath,
           url,
         ]);
+
+        if (onLog) {
+          onLog(`⚡ Live stream slice captured successfully (${captureSec}s).`);
+        }
 
         return {
           filePath: liveFilePath,
@@ -62,6 +75,7 @@ export class MediaService {
       }
 
       // 3. Regular Video: Download highest quality video (up to 1080p for efficient processing)
+      if (onLog) onLog(`Downloading video stream: "${metadata.title}"...`);
       await execa('yt-dlp', [
         '-f', 'bestvideo[ext=mp4][height<=1080]+bestaudio[ext=m4a]/best[ext=mp4]/best',
         '--merge-output-format', 'mp4',
