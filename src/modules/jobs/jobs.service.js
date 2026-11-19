@@ -149,11 +149,18 @@ export class JobsService {
       jobRepository.update(jobId, { progress: currentProgress });
 
       const filename = path.basename(clipOutputPath);
+      const generatedTitle = moment.youtube_title || moment.title;
+      const defaultDesc = moment.description || `${moment.hook || moment.title} 🔥 Watch till the end! #shorts #viral #trending #reels`;
+
       return {
         id: uuidv4(),
         index,
         title: moment.title,
+        video_title_for_youtube_short: generatedTitle,
         hook: moment.hook,
+        description: defaultDesc,
+        video_description_for_tiktok: defaultDesc,
+        video_description_for_instagram: defaultDesc,
         score: moment.score,
         reason: moment.reason,
         start: moment.start,

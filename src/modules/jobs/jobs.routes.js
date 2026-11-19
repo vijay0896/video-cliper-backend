@@ -7,6 +7,7 @@ const router = Router();
 
 router.post('/', uploadVideo.single('file'), asyncHandler(JobsController.createJob));
 router.get('/', asyncHandler(JobsController.listJobs));
+router.post('/generate-copy', asyncHandler(JobsController.generateClipCopy));
 router.get('/:id', asyncHandler(JobsController.getJob));
 router.get('/:id/clips/:filename', asyncHandler(JobsController.getClipFile));
 

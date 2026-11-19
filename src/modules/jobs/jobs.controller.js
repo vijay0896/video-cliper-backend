@@ -1,6 +1,8 @@
 import path from 'path';
 import fs from 'fs';
 import { JobsService } from './jobs.service.js';
+import { ClipsService } from '../clips/clips.service.js';
+import { jobRepository } from './jobs.repository.js';
 import { ApiResponse } from '../../core/utils/apiResponse.js';
 import { AppError } from '../../core/utils/appError.js';
 import { env } from '../../config/env.js';
@@ -96,6 +98,53 @@ export class JobsController {
     }
 
     return res.sendFile(clipPath);
+  }
+
+  /**
+   * On-demand AI Title and Short-version Description generator
+   */
+  static async generateClipCopy(req, res) {
+    const customApiKey = req.headers['x-gemini-key'] || req.body.geminiApiKey;
+    const { jobId, clipIndex, title, hook, context } = req.body;
+
+    let targetTitle = title;
+    let targetHook = hook;
+    let job = null;
+    let clip = null;
+
+    if (jobId) {
+      try {
+        job = JobsService.getJobById(jobId);
+        if (job && clipIndex !== undefined) {
+          const idx = parseInt(clipIndex, 10);
+          clip = job.clips?.[idx];
+          if (clip) {
+            targetTitle = targetTitle || clip.title || clip.video_title_for_youtube_short;
+            targetHook = targetHook || clip.hook;
+          }
+        }
+      } catch (_) {}
+    }
+
+    const copyResult = await ClipsService.generateCopy(
+      {
+        title: targetTitle,
+        hook: targetHook,
+        context,
+      },
+      customApiKey
+    );
+
+    if (job && clip) {
+      clip.video_title_for_youtube_short = copyResult.title;
+      clip.title = copyResult.title;
+      clip.video_description_for_tiktok = copyResult.description;
+      clip.video_description_for_instagram = copyResult.description;
+      clip.description = copyResult.description;
+      jobRepository.update(job.id, { clips: job.clips });
+    }
+
+    return ApiResponse.success(res, 'AI copy generated successfully', copyResult);
   }
 }
 

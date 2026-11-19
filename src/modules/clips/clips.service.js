@@ -56,6 +56,8 @@ Respond ONLY with a valid JSON array of clip objects matching this schema:
     "end": 45.0,
     "title": "Catchy YouTube Shorts Title",
     "hook": "Punchy overall context text for this clip (3 to 6 words with 1 relevant emoji, e.g. 'First shark attack 💀', 'Bro thought he was safe 😂', 'The $10M mistake 💸', 'Never do this in public ❌'). This text is overlaid at the top of the video so viewers immediately understand the context of the reel.",
+    "youtube_title": "Catchy YouTube Shorts Title with emoji (under 55 chars)",
+    "description": "Engaging 2-3 line viral caption with trending hashtags (e.g. #shorts #viral #fyp #reels)",
     "score": 9.2,
     "reason": "Why this moment will perform well on social media",
     "captions": [
@@ -145,6 +147,88 @@ Do not wrap in markdown or backticks. Return raw JSON array only.
     } catch (err) {
       logger.error(`[ClipsService] Error in Gemini clip detection: ${err.message}`);
       throw new AppError(`Clip detection failed: ${err.message}`, 500, 'GEMINI_DETECTION_ERROR');
+    }
+  }
+
+  /**
+   * Generate viral title and short-version description with hashtags on demand using Gemini
+   * @param {object} params
+   * @param {string} [params.title]
+   * @param {string} [params.hook]
+   * @param {string} [params.context]
+   * @param {string} [customApiKey]
+   * @returns {Promise<{ title: string, description: string }>}
+   */
+  static async generateCopy({ title, hook, context } = {}, customApiKey) {
+    const ai = this.getClient(customApiKey);
+    const candidateTopic = hook || title || context || 'Trending Viral Video';
+
+    const prompt = `
+You are a viral social media strategist specializing in YouTube Shorts, TikTok, and Instagram Reels.
+Generate a high-converting, viral title and a punchy short-version description with hashtags for this video clip:
+
+Context / Hook: "${candidateTopic}"
+Current Title: "${title || candidateTopic}"
+
+Requirements:
+1. "title": High CTR, curiosity-inducing YouTube Shorts title (under 55 characters) with 1-2 relevant emojis. Do not make it cheesy; make it punchy and viral.
+2. "description": An engaging 2-3 line short-version description for TikTok/Instagram/Shorts that encourages comments or shares, followed by 4-6 high-traffic relevant hashtags (e.g. #shorts #viral #reels #fyp #trending).
+
+Respond ONLY with valid JSON matching this schema:
+{
+  "title": "...",
+  "description": "..."
+}
+Do not include markdown or code block wrappers.
+`;
+
+    const candidateModels = [
+      env.GEMINI_MODEL,
+      'gemini-3.1-flash-lite',
+      'gemini-3.6-flash',
+      'gemini-3.5-flash',
+      'gemini-3.5-flash-lite',
+    ].filter(Boolean);
+    const uniqueModels = [...new Set(candidateModels)];
+
+    let responseText = null;
+
+    for (const modelName of uniqueModels) {
+      try {
+        const res = await ai.models.generateContent({
+          model: modelName,
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        });
+        if (res && res.text) {
+          responseText = res.text;
+          break;
+        }
+      } catch (err) {
+        logger.warn(`[ClipsService] generateCopy failed with ${modelName}: ${err.message}`);
+      }
+    }
+
+    if (!responseText) {
+      return {
+        title: title || `${candidateTopic} 😱`,
+        description: `${candidateTopic}! What would you do? Let us know in the comments! 👇\n\n#shorts #viral #trending #reels #fyp`,
+      };
+    }
+
+    try {
+      let cleaned = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
+      const match = cleaned.match(/\{[\s\S]*\}/);
+      if (match) cleaned = match[0];
+      const parsed = JSON.parse(cleaned);
+      return {
+        title: parsed.title || title || `${candidateTopic} 😱`,
+        description: parsed.description || `${candidateTopic} 🔥 #shorts #viral #reels`,
+      };
+    } catch (_) {
+      return {
+        title: title || `${candidateTopic} 😱`,
+        description: `${candidateTopic}! Share your thoughts below! 👇\n\n#shorts #viral #trending #reels`,
+      };
     }
   }
 }
