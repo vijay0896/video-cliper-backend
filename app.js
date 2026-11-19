@@ -10,6 +10,7 @@ import { errorHandler } from './src/core/middlewares/error.js';
 import { env } from './src/config/env.js';
 import apiRoutes from './src/routes/index.js';
 import healthRoutes from './src/modules/health/health.routes.js';
+import thumbnailRoutes from './src/modules/thumbnail/thumbnail.routes.js';
 import { JobsController } from './src/modules/jobs/jobs.controller.js';
 import { uploadVideo } from './src/core/middlewares/upload.js';
 import { asyncHandler } from './src/core/utils/asyncHandler.js';
@@ -36,11 +37,14 @@ if (env.NODE_ENV !== 'test') {
 // 4. Static Media Serving
 app.use('/output', express.static(env.OUTPUT_DIR));
 app.use('/videos', express.static(env.OUTPUT_DIR));
+app.use('/thumbnails', express.static(path.join(env.OUTPUT_DIR, 'thumbnails')));
 app.use('/uploads', express.static(env.UPLOAD_DIR));
 
 // 5. Mount API Routes
 app.use('/health', healthRoutes);
 app.use('/api/v1', apiRoutes);
+app.use('/api/thumbnail', thumbnailRoutes);
+app.use('/api/v1/thumbnail', thumbnailRoutes);
 
 // Direct compatibility endpoints for Frontend App
 app.post('/api/process', uploadVideo.single('file'), asyncHandler(JobsController.createJob));
