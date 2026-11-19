@@ -150,7 +150,10 @@ export class JobsService {
 
       const filename = path.basename(clipOutputPath);
       const generatedTitle = moment.youtube_title || moment.title;
-      const defaultDesc = moment.description || `${moment.hook || moment.title} 🔥 Watch till the end! #shorts #viral #trending #reels`;
+      const defaultDesc =
+        moment.description ||
+        moment.caption ||
+        `${moment.hook || moment.title || 'Viral Short'}! 🔥 Watch till the end! Let us know what you think in the comments below! 👇\n\n#shorts #viral #reels #trending #fyp`;
 
       return {
         id: uuidv4(),

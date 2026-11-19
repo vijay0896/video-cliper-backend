@@ -220,14 +220,24 @@ Do not include markdown or code block wrappers.
       const match = cleaned.match(/\{[\s\S]*\}/);
       if (match) cleaned = match[0];
       const parsed = JSON.parse(cleaned);
+
+      const generatedTitle = parsed.title || parsed.youtube_title || parsed.shorts_title || title || `${candidateTopic} 😱`;
+      const generatedDesc =
+        parsed.description ||
+        parsed.caption ||
+        parsed.desc ||
+        parsed.short_description ||
+        parsed.tiktok_description ||
+        `${candidateTopic}! 🔥 Watch till the end! Let us know what you think in the comments! 👇\n\n#shorts #viral #reels #trending #fyp`;
+
       return {
-        title: parsed.title || title || `${candidateTopic} 😱`,
-        description: parsed.description || `${candidateTopic} 🔥 #shorts #viral #reels`,
+        title: generatedTitle,
+        description: generatedDesc,
       };
     } catch (_) {
       return {
         title: title || `${candidateTopic} 😱`,
-        description: `${candidateTopic}! Share your thoughts below! 👇\n\n#shorts #viral #trending #reels`,
+        description: `${candidateTopic}! What would you do? Share your thoughts below! 👇\n\n#shorts #viral #trending #reels #fyp`,
       };
     }
   }
