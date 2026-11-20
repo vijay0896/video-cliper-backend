@@ -3,92 +3,51 @@
  * @description Domain service for viral moment detection, audio transcription,
  * and social media copy generation using Google Gemini Multimodal models.
  */
-import { GoogleGenAI } from '@google/genai';
-import fs from 'fs';
-import { env } from '../../config/env.js';
 import { logger } from '../../config/logger.js';
-import { AI_CONFIG } from '../../config/ai.js';
 import { AppError } from '../../core/utils/appError.js';
 import { parseLlmJson } from '../../core/utils/jsonParser.js';
 import {
   buildMomentsDetectionPrompt,
   buildCopyGenerationPrompt,
 } from './clips.prompts.js';
+import {
+  getGeminiClient,
+  prepareAudioPayload,
+  executeWithModelFallback,
+  resolveCopyFallback,
+} from './clips.utils.js';
 
 export class ClipsService {
   /**
    * Initializes and returns an authenticated Google GenAI client instance.
+   * (Maintained for backward-compatibility)
    * @param {string} [customApiKey] - Optional per-request API key override
-   * @returns {GoogleGenAI}
+   * @returns {import('@google/genai').GoogleGenAI}
    */
   static getClient(customApiKey) {
-    const key = customApiKey || env.GEMINI_API_KEY;
-    if (!key) {
-      throw new AppError('Google Gemini API Key is required for clip generation', 400, 'GEMINI_KEY_MISSING');
-    }
-    return new GoogleGenAI({ apiKey: key });
+    return getGeminiClient(customApiKey);
   }
 
   /**
    * Helper: Prepares base64 payload and MIME type for multimodal audio processing.
-   * @private
+   * (Maintained for backward-compatibility)
    * @param {string} audioFilePath - Local path to audio file
    * @returns {{ mimeType: string, data: string }}
    */
   static prepareAudioPayload(audioFilePath) {
-    if (!fs.existsSync(audioFilePath)) {
-      throw new AppError(`Audio file not found at: ${audioFilePath}`, 404, 'AUDIO_NOT_FOUND');
-    }
-
-    const audioBuffer = fs.readFileSync(audioFilePath);
-    const mimeType = audioFilePath.toLowerCase().endsWith('.mp3') ? 'audio/mp3' : 'audio/wav';
-    return {
-      mimeType,
-      data: audioBuffer.toString('base64'),
-    };
+    return prepareAudioPayload(audioFilePath);
   }
 
   /**
-   * Helper: Executes Gemini content generation across candidate models with automatic retry on transient errors.
-   * @private
-   * @param {GoogleGenAI} ai - Initialized GoogleGenAI client
+   * Helper: Executes Gemini content generation across candidate models with automatic retry.
+   * (Maintained for backward-compatibility)
+   * @param {import('@google/genai').GoogleGenAI} ai - Initialized client
    * @param {Array} contents - Request contents array
-   * @param {string} operationName - Logging context name
-   * @returns {Promise<string>} Raw text response from the first succeeding model
+   * @param {string} [operationName] - Logging context name
+   * @returns {Promise<string>}
    */
   static async executeWithModelFallback(ai, contents, operationName = 'Gemini') {
-    let lastError = null;
-
-    for (const modelName of AI_CONFIG.CANDIDATE_MODELS) {
-      logger.info(`[ClipsService:${operationName}] Attempting model: ${modelName}`);
-
-      for (let attempt = 1; attempt <= AI_CONFIG.RETRY.MAX_ATTEMPTS_PER_MODEL; attempt++) {
-        try {
-          const res = await ai.models.generateContent({
-            model: modelName,
-            contents,
-          });
-
-          if (res?.text) {
-            logger.info(`[ClipsService:${operationName}] Received response from ${modelName} on attempt ${attempt} (${res.text.length} chars)`);
-            return res.text;
-          }
-        } catch (err) {
-          lastError = err;
-          const isTransient = /503|429|demand|UNAVAILABLE|RESOURCE_EXHAUSTED/i.test(err.message);
-          logger.warn(`[ClipsService:${operationName}] Model ${modelName} attempt ${attempt} error: ${err.message}`);
-
-          if (isTransient && attempt === 1) {
-            logger.info(`[ClipsService:${operationName}] Transient spike detected on ${modelName}, backing off for ${AI_CONFIG.RETRY.TRANSIENT_BACKOFF_MS}ms...`);
-            await new Promise((resolve) => setTimeout(resolve, AI_CONFIG.RETRY.TRANSIENT_BACKOFF_MS));
-          } else {
-            break; // Try next candidate model
-          }
-        }
-      }
-    }
-
-    throw new Error(lastError ? lastError.message : `All candidate Gemini models failed for ${operationName}`);
+    return executeWithModelFallback(ai, contents, operationName);
   }
 
   /**
@@ -100,11 +59,11 @@ export class ClipsService {
    * @returns {Promise<Array<object>>} Array of detected viral clip descriptors
    */
   static async analyzeAndPickMoments(audioFilePath, totalDuration, options = {}, customApiKey) {
-    const ai = this.getClient(customApiKey);
+    const ai = getGeminiClient(customApiKey);
     logger.info(`[ClipsService] Analyzing audio with Google Gemini: ${audioFilePath}`);
 
     try {
-      const audioPayload = this.prepareAudioPayload(audioFilePath);
+      const audioPayload = prepareAudioPayload(audioFilePath);
       const prompt = buildMomentsDetectionPrompt({
         totalDuration,
         targetClips: options.target_clips || 3,
@@ -122,7 +81,7 @@ export class ClipsService {
         },
       ];
 
-      const responseText = await this.executeWithModelFallback(ai, contents, 'MomentsDetection');
+      const responseText = await executeWithModelFallback(ai, contents, 'MomentsDetection');
       const moments = parseLlmJson(responseText, []);
 
       if (!Array.isArray(moments) || moments.length === 0) {
@@ -138,7 +97,7 @@ export class ClipsService {
 
   /**
    * Generates viral titles and short-form descriptions with hashtags on demand.
-   * @param {object} params
+   * @param {object} [params]
    * @param {string} [params.title]
    * @param {string} [params.hook]
    * @param {string} [params.context]
@@ -146,7 +105,7 @@ export class ClipsService {
    * @returns {Promise<{ title: string, description: string }>}
    */
   static async generateCopy({ title, hook, context } = {}, customApiKey) {
-    const ai = this.getClient(customApiKey);
+    const ai = getGeminiClient(customApiKey);
     const candidateTopic = hook || title || context || 'Trending Viral Video';
 
     const prompt = buildCopyGenerationPrompt({ candidateTopic, title });
@@ -154,25 +113,12 @@ export class ClipsService {
     let parsed = null;
 
     try {
-      const responseText = await this.executeWithModelFallback(ai, contents, 'CopyGeneration');
+      const responseText = await executeWithModelFallback(ai, contents, 'CopyGeneration');
       parsed = parseLlmJson(responseText, null);
     } catch (err) {
       logger.warn(`[ClipsService:CopyGeneration] Fallback execution failed: ${err.message}`);
     }
 
-    // Default high-converting fallbacks if LLM fails or response is malformed
-    const fallbackTitle = title || `${candidateTopic} 😱`;
-    const fallbackDesc = `${candidateTopic}! What would you do? Let us know in the comments! 👇\n\n#shorts #viral #trending #reels #fyp`;
-
-    return {
-      title: parsed?.title || parsed?.youtube_title || parsed?.shorts_title || fallbackTitle,
-      description:
-        parsed?.description ||
-        parsed?.caption ||
-        parsed?.desc ||
-        parsed?.short_description ||
-        parsed?.tiktok_description ||
-        fallbackDesc,
-    };
+    return resolveCopyFallback({ parsed, title, candidateTopic });
   }
 }
