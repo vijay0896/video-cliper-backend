@@ -22,12 +22,13 @@ export const buildMomentsDetectionPrompt = ({
 You are an expert viral video editor specializing in TikTok, Instagram Reels, and YouTube Shorts.
 Analyze this audio recording of a video that is ${Math.round(totalDuration)} seconds long.
 
-Your goal is to detect the top ${targetClips} most engaging, viral moments.
+Your goal is to detect up to ${targetClips} most engaging moments (return as many good moments as possible, at least 1-3 clips).
 Criteria for viral moments:
 - Strong opening hook within the first 3 seconds
-- High energy, contrarian statement, emotional resonance, or valuable insight
-- Clean standalone narrative (makes sense without watching the rest of the video)
-- Duration must be strictly between ${minSeconds} and ${maxSeconds} seconds
+- High energy, contrarian statement, emotional resonance, laughter, or action
+- Clean standalone narrative
+- Duration must be between ${minSeconds} and ${maxSeconds} seconds
+- "start" and "end" timestamps in seconds must be within 0 to ${Math.round(totalDuration)}
 
 Respond ONLY with a valid JSON array of clip objects matching this schema:
 [
@@ -45,7 +46,7 @@ Respond ONLY with a valid JSON array of clip objects matching this schema:
     ]
   }
 ]
-Do not wrap in markdown or backticks. Return raw JSON array only.
+Do not wrap in markdown or backticks. Return raw JSON array only. Always return valid JSON.
 `;
 
 /**

@@ -101,9 +101,9 @@ export class JobsService {
       jobRepository.addLog(jobId, 'Local video segment sliced successfully.');
     }
 
-    // 2. Probe Video Metadata
+    // 2. Probe Video Metadata (Ground truth of the local video actually downloaded or sliced)
     const probe = await MediaService.probeVideo(localVideoPath);
-    duration = duration || probe.duration;
+    duration = (probe && probe.duration > 0) ? probe.duration : duration;
     jobRepository.update(jobId, {
       title: videoTitle,
       duration,

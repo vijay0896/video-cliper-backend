@@ -95,11 +95,20 @@ export class MediaService {
       await execa('yt-dlp', videoArgs);
 
       const filePath = resolveDownloadedFile(outputDir, fileId);
+      const isSliced = startTime != null || endTime != null;
+      let duration = metadata.duration || 0;
+      if (isSliced) {
+        const startSec = parseTimeToSeconds(startTime) || 0;
+        const endSec = parseTimeToSeconds(endTime);
+        if (endSec != null) {
+          duration = Math.max(1, endSec - startSec);
+        }
+      }
 
       return {
         filePath,
         title: metadata.title || 'Untitled Video',
-        duration: metadata.duration || 0,
+        duration,
         isLive: false,
       };
     } catch (err) {

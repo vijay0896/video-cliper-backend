@@ -145,20 +145,28 @@ export const formatSecondsToTimestamp = (totalSeconds) => {
  * @returns {string[]}
  */
 export const buildYtDlpVideoArgs = ({ url, outputTemplate, startTime = null, endTime = null }) => {
+  const isSliced = startTime != null || endTime != null;
+
+  // For time-sliced section downloads (especially on long streams), prefer HLS (m3u8) or progressive mp4.
+  // HLS formats have pre-indexed segment chunks, which lets ffmpeg seek directly without YouTube's 30 KiB/s single-stream throttle.
+  const formatString = isSliced
+    ? 'bestvideo[height<=1080][protocol=m3u8]+bestaudio[protocol=m3u8]/bestvideo[ext=mp4][height<=1080]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]/best'
+    : YT_DLP_CONFIG.VIDEO_FORMAT;
+
   const args = [
-    '-f', YT_DLP_CONFIG.VIDEO_FORMAT,
-    '--merge-output-format', YT_DLP_CONFIG.OUTPUT_FORMAT,
+    '-f', formatString,
     '--no-playlist',
   ];
 
-  if (startTime != null || endTime != null) {
+  if (isSliced) {
     const startSec = parseTimeToSeconds(startTime) || 0;
     const endSec = parseTimeToSeconds(endTime);
     const startStr = formatSecondsToTimestamp(startSec);
     const endStr = endSec != null ? formatSecondsToTimestamp(endSec) : 'inf';
-    // Download only the requested slice directly via HTTP byte ranges
+    // Download only the requested slice directly via fast stream copying (NO re-encoding)
     args.push('--download-sections', `*${startStr}-${endStr}`);
-    args.push('--force-keyframes-at-cuts');
+  } else {
+    args.push('--merge-output-format', YT_DLP_CONFIG.OUTPUT_FORMAT);
   }
 
   args.push('-o', outputTemplate, url);
