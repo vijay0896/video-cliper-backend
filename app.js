@@ -31,8 +31,18 @@ app.use(
   helmet({
     contentSecurityPolicy: false, // Permits media playback & canvas rendering
     crossOriginResourcePolicy: { policy: 'cross-origin' }, // Allows cross-origin video & image access
+    crossOriginOpenerPolicy: false, // Allows cross-origin popups and local tab interactions
   })
 );
+
+// Private Network Access (PNA) preflight support for local Chrome ports
+app.use((req, res, next) => {
+  if (req.headers['access-control-request-private-network']) {
+    res.setHeader('Access-Control-Allow-Private-Network', 'true');
+  }
+  next();
+});
+
 app.use(corsMiddleware);
 app.use(compression());
 
