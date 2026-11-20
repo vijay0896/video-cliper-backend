@@ -1,10 +1,3 @@
-/**
- * @file app.js
- * @description Core Express Application Configuration
- * Establishes security policies, request tracing, body parsers, logging streams,
- * static media pipelines, central API gateways, and standardized error handling.
- * Modeled after enterprise MNC architectural patterns.
- */
 import express from 'express';
 import helmet from 'helmet';
 import compression from 'compression';

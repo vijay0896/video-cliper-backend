@@ -1,4 +1,5 @@
 import { ThumbnailService } from './thumbnail.service.js';
+import { extractGeminiKey } from './thumbnail.utils.js';
 
 export class ThumbnailController {
   /**
@@ -15,7 +16,7 @@ export class ThumbnailController {
    * POST /api/thumbnail/analyze
    */
   static async analyze(req, res) {
-    const customApiKey = req.headers['x-gemini-key'] || req.body.geminiApiKey;
+    const customApiKey = extractGeminiKey(req);
     const file = req.file;
     const url = req.body.url;
     const sessionId = req.body.session_id;
@@ -31,7 +32,7 @@ export class ThumbnailController {
    * POST /api/thumbnail/titles
    */
   static async titles(req, res) {
-    const customApiKey = req.headers['x-gemini-key'] || req.body.geminiApiKey;
+    const customApiKey = extractGeminiKey(req);
     const { session_id, title, message } = req.body;
 
     const result = await ThumbnailService.refineTitles(
@@ -55,7 +56,7 @@ export class ThumbnailController {
    * POST /api/thumbnail/generate
    */
   static async generate(req, res) {
-    const customApiKey = req.headers['x-gemini-key'] || req.body.geminiApiKey;
+    const customApiKey = extractGeminiKey(req);
     const {
       session_id,
       title,
@@ -88,7 +89,7 @@ export class ThumbnailController {
    * POST /api/thumbnail/describe
    */
   static async describe(req, res) {
-    const customApiKey = req.headers['x-gemini-key'] || req.body.geminiApiKey;
+    const customApiKey = extractGeminiKey(req);
     const { session_id, title } = req.body;
 
     const result = await ThumbnailService.generateDescription(
@@ -116,4 +117,3 @@ export class ThumbnailController {
     return res.status(200).json(result);
   }
 }
-
