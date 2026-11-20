@@ -8,6 +8,13 @@ import { RenderService } from '../render/render.service.js';
 import { env } from '../../config/env.js';
 import { logger } from '../../config/logger.js';
 import { AppError } from '../../core/utils/appError.js';
+import { PIPELINE_CONFIG } from './jobs.constants.js';
+import {
+  calculateVideoTop,
+  normalizeCaptionTimestamps,
+  buildClipMetadata,
+  runConcurrentPool,
+} from './jobs.utils.js';
 
 export class JobsService {
   /**
@@ -27,7 +34,7 @@ export class JobsService {
     const job = {
       id: jobId,
       status: 'pending',
-      progress: 0,
+      progress: PIPELINE_CONFIG.PROGRESS.INITIAL,
       url: url || null,
       sourceFile: filePath || null,
       title: 'Processing video...',
@@ -59,7 +66,10 @@ export class JobsService {
    */
   static async executePipeline(jobId, { url, filePath, options, jobDir }, customApiKey) {
     logger.info(`[JobsService] Starting background pipeline for job: ${jobId}`);
-    jobRepository.update(jobId, { status: 'processing', progress: 10 });
+    jobRepository.update(jobId, {
+      status: 'processing',
+      progress: PIPELINE_CONFIG.PROGRESS.INGEST_START,
+    });
 
     let localVideoPath = filePath;
     let videoTitle = 'Uploaded Video';
@@ -68,7 +78,7 @@ export class JobsService {
     // 1. Ingest Video (Download if YouTube URL)
     if (url) {
       jobRepository.addLog(jobId, `Downloading video from YouTube: ${url}`);
-      jobRepository.update(jobId, { progress: 20 });
+      jobRepository.update(jobId, { progress: PIPELINE_CONFIG.PROGRESS.DOWNLOAD_START });
 
       const addJobLog = (msg) => {
         logger.info(`[JobsService] [Job ${jobId}] ${msg}`);
@@ -91,33 +101,31 @@ export class JobsService {
     jobRepository.update(jobId, {
       title: videoTitle,
       duration,
-      progress: 35,
+      progress: PIPELINE_CONFIG.PROGRESS.PROBE_DONE,
     });
     jobRepository.addLog(jobId, `Video probed: ${probe.width}x${probe.height}, ${duration.toFixed(1)}s`);
 
     // 3. Audio Extraction (Fast 64k mono MP3 for 4x faster Gemini ingestion)
     jobRepository.addLog(jobId, 'Extracting compressed audio for speech analysis...');
-    jobRepository.update(jobId, { progress: 45 });
+    jobRepository.update(jobId, { progress: PIPELINE_CONFIG.PROGRESS.AUDIO_DONE });
     const audioPath = path.join(jobDir, 'audio.mp3');
     await MediaService.extractAudio(localVideoPath, audioPath);
 
     // 4. Gemini AI Moment Detection
     jobRepository.addLog(jobId, 'Sending audio to Google Gemini AI to detect viral moments...');
-    jobRepository.update(jobId, { progress: 60 });
+    jobRepository.update(jobId, { progress: PIPELINE_CONFIG.PROGRESS.MOMENTS_DONE });
     const detectedMoments = await ClipsService.analyzeAndPickMoments(audioPath, duration, options, customApiKey);
     jobRepository.addLog(jobId, `Gemini found ${detectedMoments.length} viral moment candidate(s)`);
 
     // 5. Render Vertical 9:16 Clips with Parallel Hardware Concurrency
     jobRepository.addLog(jobId, `Rendering ${detectedMoments.length} vertical clips (Hardware Accelerated)...`);
-    jobRepository.update(jobId, { progress: 70 });
+    jobRepository.update(jobId, { progress: PIPELINE_CONFIG.PROGRESS.RENDER_START });
 
-    const CONCURRENCY = 3; // 3 concurrent renders on Apple Silicon M1
     let completedCount = 0;
+    const videoTop = calculateVideoTop(probe);
 
     const renderMoment = async (moment, index) => {
       jobRepository.addLog(jobId, `[Rendering] Clip ${index + 1}/${detectedMoments.length}: "${moment.title}"`);
-      const fgHeight = probe.width && probe.height ? Math.round(1080 * (probe.height / probe.width)) : 608;
-      const videoTop = Math.max(0, Math.round((1920 - fgHeight) / 2));
 
       const clipOutputPath = await RenderService.renderVerticalClip(
         localVideoPath,
@@ -127,78 +135,39 @@ export class JobsService {
         { hook: moment.hook, title: moment.title, videoTop }
       );
 
-      // Normalize caption timestamps so they start at 0s relative to the clip
-      const clipStartMs = Math.round(moment.start * 1000);
-      const rawCaptions = moment.captions || [];
-      const normalizedCaptions = rawCaptions.map((c) => {
-        let s = Number(c.startMs) || 0;
-        let e = Number(c.endMs) || 0;
-        if (s >= clipStartMs) {
-          s -= clipStartMs;
-          e -= clipStartMs;
-        }
-        return {
-          text: c.text,
-          startMs: Math.max(0, Math.round(s)),
-          endMs: Math.max(0, Math.round(e)),
-        };
-      });
+      // Normalize speech captions relative to clip start
+      const normalizedCaptions = normalizeCaptionTimestamps(moment.captions || [], moment.start);
 
       completedCount++;
-      const currentProgress = 70 + Math.round((completedCount / detectedMoments.length) * 28);
+      const currentProgress =
+        PIPELINE_CONFIG.PROGRESS.RENDER_START +
+        Math.round((completedCount / detectedMoments.length) * 28);
       jobRepository.update(jobId, { progress: currentProgress });
 
-      const filename = path.basename(clipOutputPath);
-      const generatedTitle = moment.youtube_title || moment.title;
-      const defaultDesc =
-        moment.description ||
-        moment.caption ||
-        `${moment.hook || moment.title || 'Viral Short'}! 🔥 Watch till the end! Let us know what you think in the comments below! 👇\n\n#shorts #viral #reels #trending #fyp`;
-
-      return {
-        id: uuidv4(),
+      return buildClipMetadata({
+        clipOutputPath,
+        moment,
+        jobId,
+        normalizedCaptions,
         index,
-        title: moment.title,
-        video_title_for_youtube_short: generatedTitle,
-        hook: moment.hook,
-        description: defaultDesc,
-        video_description_for_tiktok: defaultDesc,
-        video_description_for_instagram: defaultDesc,
-        score: moment.score,
-        reason: moment.reason,
-        start: moment.start,
-        end: moment.end,
-        duration: Math.round(moment.end - moment.start),
-        video_url: `/videos/${jobId}/${filename}`,
-        videoUrl: `/videos/${jobId}/${filename}`,
-        captions: normalizedCaptions,
-      };
+      });
     };
 
     // Parallel Worker Pool
-    const results = [];
-    const pool = [];
-
-    for (let i = 0; i < detectedMoments.length; i++) {
-      const task = renderMoment(detectedMoments[i], i).then((clip) => {
-        results.push(clip);
-        pool.splice(pool.indexOf(task), 1);
-      });
-      pool.push(task);
-      if (pool.length >= CONCURRENCY) {
-        await Promise.race(pool);
-      }
-    }
-    await Promise.all(pool);
+    const renderedClips = await runConcurrentPool(
+      detectedMoments,
+      PIPELINE_CONFIG.CONCURRENCY,
+      renderMoment
+    );
 
     // Keep clips in original chronological order
-    results.sort((a, b) => a.index - b.index);
-    const finalClips = results.map(({ index, ...clip }) => clip);
+    renderedClips.sort((a, b) => a.index - b.index);
+    const finalClips = renderedClips.map(({ index, ...clip }) => clip);
 
     // 6. Complete
     jobRepository.update(jobId, {
       status: 'completed',
-      progress: 100,
+      progress: PIPELINE_CONFIG.PROGRESS.COMPLETE,
       clips: finalClips,
     });
     jobRepository.addLog(jobId, 'All clips successfully generated and ready for download!');
@@ -217,4 +186,3 @@ export class JobsService {
     return jobRepository.findAll();
   }
 }
-

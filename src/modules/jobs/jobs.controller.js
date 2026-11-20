@@ -6,23 +6,17 @@ import { jobRepository } from './jobs.repository.js';
 import { ApiResponse } from '../../core/utils/apiResponse.js';
 import { AppError } from '../../core/utils/appError.js';
 import { env } from '../../config/env.js';
+import { parseJobOptions, extractGeminiKey } from './jobs.utils.js';
 
 export class JobsController {
   /**
    * Submit new video for processing
    */
   static async createJob(req, res) {
-    const customApiKey = req.headers['x-gemini-key'] || req.body.geminiApiKey;
+    const customApiKey = extractGeminiKey(req);
     const url = req.body.url;
     const filePath = req.file ? req.file.path : null;
-
-    const options = {
-      target_clips: req.body.targetClips || req.body.target_clips ? parseInt(req.body.targetClips || req.body.target_clips, 10) : 3,
-      clip_min_seconds: req.body.clipMinSeconds || req.body.clip_min_seconds ? parseInt(req.body.clipMinSeconds || req.body.clip_min_seconds, 10) : 15,
-      clip_max_seconds: req.body.clipMaxSeconds || req.body.clip_max_seconds ? parseInt(req.body.clipMaxSeconds || req.body.clip_max_seconds, 10) : 60,
-      live_capture_seconds: req.body.live_capture_seconds || req.body.liveCaptureSeconds ? parseInt(req.body.live_capture_seconds || req.body.liveCaptureSeconds, 10) : 60,
-      max_minutes: req.body.max_minutes ? parseInt(req.body.max_minutes, 10) : null,
-    };
+    const options = parseJobOptions(req.body);
 
     const job = await JobsService.submitJob({ url, filePath, options }, customApiKey);
 
@@ -104,7 +98,7 @@ export class JobsController {
    * On-demand AI Title and Short-version Description generator
    */
   static async generateClipCopy(req, res) {
-    const customApiKey = req.headers['x-gemini-key'] || req.body.geminiApiKey;
+    const customApiKey = extractGeminiKey(req);
     const { jobId, clipIndex, title, hook, context } = req.body;
 
     let targetTitle = title;
@@ -147,4 +141,3 @@ export class JobsController {
     return ApiResponse.success(res, 'AI copy generated successfully', copyResult);
   }
 }
-
