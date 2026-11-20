@@ -12,11 +12,12 @@ export const AI_CONFIG = {
   CANDIDATE_MODELS: [
     ...new Set(
       [
-        env.GEMINI_MODEL,
-        'gemini-3.1-flash-lite',
-        'gemini-3.6-flash',
-        'gemini-3.5-flash',
-        'gemini-3.5-flash-lite',
+        env.GEMINI_MODEL,           // .env override (if specified)
+        'gemini-4-hydrogen',        // ⚡ Tier 1: Fastest & Efficient Gemini 4 model
+        'gemini-4-argon',           // 🚀 Tier 2: Fast reasoning fallback
+        'gemini-4-neon',            // 🧠 Tier 3: Frontier intelligence fallback
+        'gemini-3.1-flash-lite',    // 🛡️ Tier 4: Stable legacy fallback
+        'gemini-2.5-flash',         // 🛡️ Tier 5: High-availability fallback
       ].filter(Boolean)
     ),
   ],
