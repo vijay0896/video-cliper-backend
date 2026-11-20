@@ -11,6 +11,8 @@ import {
   buildYtDlpVideoArgs,
   buildAudioExtractionArgs,
   resolveDownloadedFile,
+  parseTimeToSeconds,
+  formatSecondsToTimestamp,
 } from './media.utils.js';
 
 export class MediaService {
@@ -71,9 +73,25 @@ export class MediaService {
         };
       }
 
-      // 3. Regular Video Download (up to 1080p MP4 for optimal pipeline throughput)
-      if (onLog) onLog(`Downloading video stream: "${metadata.title}"...`);
-      const videoArgs = buildYtDlpVideoArgs({ url, outputTemplate });
+      // 3. Regular Video / Stream Download (up to 1080p MP4 for optimal pipeline throughput)
+      const startTime = options.start_time ?? options.startTime ?? options.sourceStart ?? null;
+      const endTime = options.end_time ?? options.endTime ?? options.sourceEnd ?? null;
+
+      if (startTime != null || endTime != null) {
+        const startSec = parseTimeToSeconds(startTime) || 0;
+        const endSec = parseTimeToSeconds(endTime);
+        const startLabel = formatSecondsToTimestamp(startSec);
+        const endLabel = endSec != null ? formatSecondsToTimestamp(endSec) : 'end of video';
+
+        logger.info(`[MediaService] Time-sliced section requested: ${startLabel} ➔ ${endLabel}`);
+        if (onLog) {
+          onLog(`⚡ Downloading stream slice: [${startLabel} ➔ ${endLabel}] (skipping unused stream parts)...`);
+        }
+      } else {
+        if (onLog) onLog(`Downloading video stream: "${metadata.title}"...`);
+      }
+
+      const videoArgs = buildYtDlpVideoArgs({ url, outputTemplate, startTime, endTime });
       await execa('yt-dlp', videoArgs);
 
       const filePath = resolveDownloadedFile(outputDir, fileId);
@@ -88,6 +106,31 @@ export class MediaService {
       logger.error(`[MediaService] yt-dlp error: ${err.message}`);
       throw new AppError(`Failed to download YouTube video: ${err.message}`, 400, 'YOUTUBE_DOWNLOAD_ERROR');
     }
+  }
+
+  /**
+   * Fast stream-copy slice of local video without re-encoding
+   * @param {string} inputPath
+   * @param {string} outputPath
+   * @param {number|string} [startTime]
+   * @param {number|string} [endTime]
+   */
+  static async sliceLocalVideo(inputPath, outputPath, startTime, endTime) {
+    const startSec = parseTimeToSeconds(startTime) || 0;
+    const endSec = parseTimeToSeconds(endTime);
+
+    const args = ['-y'];
+    if (startSec > 0) {
+      args.push('-ss', formatSecondsToTimestamp(startSec));
+    }
+    if (endSec != null) {
+      args.push('-to', formatSecondsToTimestamp(endSec));
+    }
+    args.push('-i', inputPath, '-c', 'copy', outputPath);
+
+    logger.info(`[MediaService] Slicing local video: ffmpeg ${args.join(' ')}`);
+    await execa('ffmpeg', args);
+    return outputPath;
   }
 
   /**

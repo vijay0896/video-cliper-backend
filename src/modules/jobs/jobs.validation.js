@@ -15,6 +15,10 @@ export const createJobSchema = z.object({
   liveCaptureSeconds: z.coerce.number().int().min(15).max(600).optional(),
   live_capture_seconds: z.coerce.number().int().min(15).max(600).optional(),
   max_minutes: z.coerce.number().int().min(1).max(120).optional(),
+  startTime: z.union([z.string(), z.number()]).optional(),
+  endTime: z.union([z.string(), z.number()]).optional(),
+  sourceStart: z.union([z.string(), z.number()]).optional(),
+  sourceEnd: z.union([z.string(), z.number()]).optional(),
   geminiApiKey: z.string().trim().optional(),
 }).passthrough();
 

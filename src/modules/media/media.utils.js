@@ -79,19 +79,91 @@ export const buildYtDlpLiveArgs = ({ url, liveFilePath, captureSec }) => [
 ];
 
 /**
+ * Parse any time string or number into total seconds.
+ * Supports: "02:30:15" -> 9015, "45:30" -> 2730, "90m" -> 5400, "2h 30m" -> 9000, 7200 -> 7200
+ * @param {string|number} [input]
+ * @returns {number|null}
+ */
+export const parseTimeToSeconds = (input) => {
+  if (input == null || input === '') return null;
+  if (typeof input === 'number') {
+    return Number.isFinite(input) && input >= 0 ? Math.round(input) : null;
+  }
+
+  const str = String(input).trim().toLowerCase();
+  if (!str) return null;
+  if (/^\d+$/.test(str)) return parseInt(str, 10);
+
+  // Parse "1h 30m" or "90m" or "45s"
+  let total = 0;
+  let hasUnit = false;
+  const hMatch = str.match(/(\d+)\s*h/);
+  const mMatch = str.match(/(\d+)\s*m/);
+  const sMatch = str.match(/(\d+)\s*s/);
+  if (hMatch) { total += parseInt(hMatch[1], 10) * 3600; hasUnit = true; }
+  if (mMatch) { total += parseInt(mMatch[1], 10) * 60; hasUnit = true; }
+  if (sMatch) { total += parseInt(sMatch[1], 10); hasUnit = true; }
+  if (hasUnit) return total;
+
+  // Parse "HH:MM:SS" or "MM:SS"
+  const parts = str.split(':').map((p) => parseInt(p, 10));
+  if (parts.some((p) => isNaN(p) || p < 0)) return null;
+
+  if (parts.length === 3) {
+    return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  }
+  if (parts.length === 2) {
+    return parts[0] * 60 + parts[1];
+  }
+  if (parts.length === 1) {
+    return parts[0];
+  }
+  return null;
+};
+
+/**
+ * Format total seconds into "HH:MM:SS" string for yt-dlp / ffmpeg.
+ * @param {number} totalSeconds
+ * @returns {string}
+ */
+export const formatSecondsToTimestamp = (totalSeconds) => {
+  const s = Math.max(0, Math.round(totalSeconds || 0));
+  const hours = Math.floor(s / 3600);
+  const minutes = Math.floor((s % 3600) / 60);
+  const seconds = s % 60;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+};
+
+/**
  * Builds arguments for regular YouTube video download up to 1080p.
+ * If startTime or endTime is specified, uses --download-sections to only download that range.
  * @param {object} params
  * @param {string} params.url
  * @param {string} params.outputTemplate
+ * @param {number|string} [params.startTime]
+ * @param {number|string} [params.endTime]
  * @returns {string[]}
  */
-export const buildYtDlpVideoArgs = ({ url, outputTemplate }) => [
-  '-f', YT_DLP_CONFIG.VIDEO_FORMAT,
-  '--merge-output-format', YT_DLP_CONFIG.OUTPUT_FORMAT,
-  '--no-playlist',
-  '-o', outputTemplate,
-  url,
-];
+export const buildYtDlpVideoArgs = ({ url, outputTemplate, startTime = null, endTime = null }) => {
+  const args = [
+    '-f', YT_DLP_CONFIG.VIDEO_FORMAT,
+    '--merge-output-format', YT_DLP_CONFIG.OUTPUT_FORMAT,
+    '--no-playlist',
+  ];
+
+  if (startTime != null || endTime != null) {
+    const startSec = parseTimeToSeconds(startTime) || 0;
+    const endSec = parseTimeToSeconds(endTime);
+    const startStr = formatSecondsToTimestamp(startSec);
+    const endStr = endSec != null ? formatSecondsToTimestamp(endSec) : 'inf';
+    // Download only the requested slice directly via HTTP byte ranges
+    args.push('--download-sections', `*${startStr}-${endStr}`);
+    args.push('--force-keyframes-at-cuts');
+  }
+
+  args.push('-o', outputTemplate, url);
+  return args;
+};
 
 /**
  * Builds arguments for audio extraction (MP3 or WAV).

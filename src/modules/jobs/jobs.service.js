@@ -93,6 +93,12 @@ export class JobsService {
       if (!downloadResult.isLive) {
         jobRepository.addLog(jobId, `Download complete: "${videoTitle}"`);
       }
+    } else if (filePath && (options.start_time != null || options.end_time != null)) {
+      jobRepository.addLog(jobId, 'Slicing requested time segment from uploaded video...');
+      const slicedVideoPath = path.join(jobDir, 'sliced_input.mp4');
+      await MediaService.sliceLocalVideo(filePath, slicedVideoPath, options.start_time, options.end_time);
+      localVideoPath = slicedVideoPath;
+      jobRepository.addLog(jobId, 'Local video segment sliced successfully.');
     }
 
     // 2. Probe Video Metadata

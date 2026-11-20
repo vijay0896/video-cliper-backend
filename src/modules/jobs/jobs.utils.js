@@ -1,6 +1,7 @@
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { DEFAULT_JOB_OPTIONS } from './jobs.constants.js';
+import { parseTimeToSeconds } from '../media/media.utils.js';
 
 /**
  * Job module utilities for options parsing, caption normalization, layout calculations, and concurrency.
@@ -35,6 +36,8 @@ export const parseJobOptions = (body = {}) => {
       ? parseInt(body.live_capture_seconds || body.liveCaptureSeconds, 10)
       : DEFAULT_JOB_OPTIONS.LIVE_CAPTURE_SECONDS,
     max_minutes: body.max_minutes ? parseInt(body.max_minutes, 10) : null,
+    start_time: parseTimeToSeconds(body.startTime ?? body.sourceStart),
+    end_time: parseTimeToSeconds(body.endTime ?? body.sourceEnd),
   };
 };
 
