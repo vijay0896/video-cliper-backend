@@ -16,7 +16,7 @@ export const createJobSchema = z.object({
   live_capture_seconds: z.coerce.number().int().min(15).max(600).optional(),
   max_minutes: z.coerce.number().int().min(1).max(120).optional(),
   geminiApiKey: z.string().trim().optional(),
-});
+}).passthrough();
 
 export const generateCopySchema = z.object({
   jobId: z.string().trim().optional(),
