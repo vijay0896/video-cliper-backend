@@ -4,22 +4,45 @@ import { z } from 'zod';
  * Validation schemas for Video Processing Jobs API.
  */
 
+const emptyToUndefined = (val) => (val === '' || val === null || val === undefined ? undefined : val);
+
+const optionalTime = z.preprocess(
+  emptyToUndefined,
+  z.union([z.string(), z.number()]).optional()
+);
+
+const optionalNumber = (min, max) =>
+  z.preprocess(
+    emptyToUndefined,
+    z.coerce.number().int().min(min).max(max).optional()
+  );
+
+const optionalUrl = z.preprocess(
+  emptyToUndefined,
+  z.string().trim().url('Must provide a valid URL').optional()
+);
+
+const optionalString = z.preprocess(
+  emptyToUndefined,
+  z.string().trim().optional()
+);
+
 export const createJobSchema = z.object({
-  url: z.string().trim().url('Must provide a valid URL').optional().or(z.literal('')),
-  targetClips: z.coerce.number().int().min(1).max(10).optional(),
-  target_clips: z.coerce.number().int().min(1).max(10).optional(),
-  clipMinSeconds: z.coerce.number().int().min(5).max(120).optional(),
-  clip_min_seconds: z.coerce.number().int().min(5).max(120).optional(),
-  clipMaxSeconds: z.coerce.number().int().min(15).max(300).optional(),
-  clip_max_seconds: z.coerce.number().int().min(15).max(300).optional(),
-  liveCaptureSeconds: z.coerce.number().int().min(15).max(600).optional(),
-  live_capture_seconds: z.coerce.number().int().min(15).max(600).optional(),
-  max_minutes: z.coerce.number().int().min(1).max(120).optional(),
-  startTime: z.union([z.string(), z.number()]).optional(),
-  endTime: z.union([z.string(), z.number()]).optional(),
-  sourceStart: z.union([z.string(), z.number()]).optional(),
-  sourceEnd: z.union([z.string(), z.number()]).optional(),
-  geminiApiKey: z.string().trim().optional(),
+  url: optionalUrl,
+  targetClips: optionalNumber(1, 10),
+  target_clips: optionalNumber(1, 10),
+  clipMinSeconds: optionalNumber(5, 120),
+  clip_min_seconds: optionalNumber(5, 120),
+  clipMaxSeconds: optionalNumber(15, 300),
+  clip_max_seconds: optionalNumber(15, 300),
+  liveCaptureSeconds: optionalNumber(15, 600),
+  live_capture_seconds: optionalNumber(15, 600),
+  max_minutes: optionalNumber(1, 120),
+  startTime: optionalTime,
+  endTime: optionalTime,
+  sourceStart: optionalTime,
+  sourceEnd: optionalTime,
+  geminiApiKey: optionalString,
 }).passthrough();
 
 export const generateCopySchema = z.object({
@@ -36,4 +59,5 @@ export const generateCopySchema = z.object({
     path: ['title'],
   }
 );
+
 
