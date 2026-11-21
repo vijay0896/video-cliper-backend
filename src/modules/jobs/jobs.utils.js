@@ -66,13 +66,17 @@ export const normalizeCaptionTimestamps = (rawCaptions = [], clipStartSec = 0) =
 
 /**
  * Calculates video vertical offset (videoTop) for 9:16 layout based on probed video dimensions.
- * @param {object} probe
+ * For landscape videos, height is increased by 30% (scale 1404 cropped to 1080).
+ * @param {object} [probe]
  * @returns {number}
  */
-export const calculateVideoTop = (probe) => {
+export const calculateVideoTop = (probe = {}) => {
+  const isLandscape = !probe.width || !probe.height || probe.width > probe.height;
   const fgHeight = probe.width && probe.height
-    ? Math.round(1080 * (probe.height / probe.width))
-    : 608;
+    ? (isLandscape
+        ? Math.round(1404 * (probe.height / probe.width))
+        : Math.round(1080 * (probe.height / probe.width)))
+    : 790;
   return Math.max(0, Math.round((1920 - fgHeight) / 2));
 };
 

@@ -87,20 +87,23 @@ export const getVideoEncoderArgs = () => {
 /**
  * Builds high-performance FFmpeg filter graph for 9:16 vertical solid black letterbox (CarryMinati / Shorts style)
  * with optional viral hook overlay.
- * Replaces heavy multi-pass boxblur with native hardware-friendly pad=1080:1920, saving ~35% CPU and 85% file size!
+ * For landscape videos, scales width to 1404 and crops sides to 1080 to increase height by ~30%, filling the screen
+ * nicely like viral reels while keeping solid black canvas on top and bottom.
  * @param {object} params
  * @param {boolean} [params.hasHookOverlay=false]
  * @returns {string}
  */
 export const buildVerticalFilterGraph = ({ hasHookOverlay = false }) => {
+  const videoBase = `[0:v]scale='if(gt(iw,ih),1404,1080)':-2,crop=1080:ih:(iw-1080)/2:0,setsar=1,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black`;
+
   if (hasHookOverlay) {
     return [
-      `[0:v]scale=1080:-2,setsar=1,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black[base]`,
+      `${videoBase}[base]`,
       `[base][1:v]overlay=0:0[outv]`,
     ].join(';');
   }
 
-  return `[0:v]scale=1080:-2,setsar=1,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black[outv]`;
+  return `${videoBase}[outv]`;
 };
 
 /**
