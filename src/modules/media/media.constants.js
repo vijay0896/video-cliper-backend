@@ -3,7 +3,7 @@
  */
 
 export const YT_DLP_CONFIG = {
-  VIDEO_FORMAT: 'bestvideo[ext=mp4][height<=1080]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+  VIDEO_FORMAT: 'bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best[height<=720]/best',
   OUTPUT_FORMAT: 'mp4',
 };
 

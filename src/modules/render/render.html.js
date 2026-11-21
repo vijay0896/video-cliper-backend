@@ -17,28 +17,40 @@ export const escapeHtml = (str = '') => {
 };
 
 /**
- * Calculates optimal layout coordinates for the context pill banner.
- * @param {object} params
- * @param {string} params.hookText
- * @param {number} [params.videoTop=656]
- * @param {number} [params.canvasWidth=1080]
- * @returns {{ boxWidth: number, boxX: number, pillY: number, textY: number }}
+ * Splits text into readable word-wrapped lines for viral title display.
+ * @param {string} text
+ * @param {number} [maxChars=26]
+ * @returns {string[]}
  */
-export const calculateHookLayout = ({ hookText, videoTop = 656, canvasWidth = 1080 }) => {
-  const textLength = (hookText || '').length;
-  const boxWidth = Math.min(1000, Math.max(450, textLength * 30 + 100));
-  const boxX = Math.round((canvasWidth - boxWidth) / 2);
+export const wrapTextLines = (text = '', maxChars = 26) => {
+  const words = text.split(/\s+/).filter(Boolean);
+  if (words.length === 0) return [];
 
-  // Position pill nicely just above the video frame (with 36px breathing room)
-  const pillY = videoTop > 200 ? Math.round(videoTop - 110 - 36) : 140;
-  const textY = pillY + 74;
+  const lines = [];
+  let current = '';
 
-  return { boxWidth, boxX, pillY, textY };
+  for (const w of words) {
+    if (!current) {
+      current = w;
+    } else if ((current + ' ' + w).length <= maxChars) {
+      current += ' ' + w;
+    } else {
+      lines.push(current);
+      current = w;
+    }
+  }
+
+  if (current) {
+    lines.push(current);
+  }
+
+  return lines;
 };
 
 /**
- * Generates high-contrast SVG banner for the overall clip context / hook.
- * @param {string} hookText - Raw hook text
+ * Generates viral reel title SVG overlay (CarryMinati / Shorts / Reels style).
+ * Renders bold white multi-line text with shadow centered in the top black canvas area.
+ * @param {string} hookText - Raw hook / title text
  * @param {number} [videoTop=656] - Top offset of video frame inside 9:16 canvas
  * @param {number} [canvasWidth=1080] - Canvas width
  * @param {number} [canvasHeight=1920] - Canvas height
@@ -51,23 +63,31 @@ export const generateHookSvgMarkup = (
   canvasHeight = 1920
 ) => {
   const cleanText = escapeHtml(hookText);
-  const { boxWidth, boxX, pillY, textY } = calculateHookLayout({
-    hookText: cleanText,
-    videoTop,
-    canvasWidth,
-  });
+  const rawLines = wrapTextLines(cleanText, 26);
+  const lines = rawLines.length > 0 ? rawLines : [cleanText];
+
+  // Dynamic font sizing & line heights for optimal readability
+  const fontSize = lines.length > 2 ? 46 : lines.length === 2 ? 50 : 54;
+  const lineHeight = lines.length > 2 ? 62 : 68;
+  const totalTextHeight = (lines.length - 1) * lineHeight;
+
+  // Vertically center text in the top black zone (Y: 130 to videoTop - 40)
+  const topSafe = 130;
+  const bottomSafe = Math.max(topSafe + 80, videoTop - 40);
+  const centerY = Math.round((topSafe + bottomSafe) / 2);
+  const startY = Math.max(topSafe + fontSize, Math.round(centerY - (totalTextHeight / 2)));
+  const centerX = Math.round(canvasWidth / 2);
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg width="${canvasWidth}" height="${canvasHeight}" viewBox="0 0 ${canvasWidth} ${canvasHeight}" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="6" stdDeviation="12" flood-color="#000000" flood-opacity="0.85"/>
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#000000" flood-opacity="0.95"/>
     </filter>
   </defs>
-  <!-- Modern Translucent Context Pill placed just above the video -->
-  <rect x="${boxX}" y="${pillY}" width="${boxWidth}" height="110" rx="36" ry="36" fill="rgba(0, 0, 0, 0.78)" stroke="rgba(255, 255, 255, 0.22)" stroke-width="3" filter="url(#shadow)" />
-  <text x="${Math.round(canvasWidth / 2)}" y="${textY}" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="46" fill="#FFFFFF" text-anchor="middle" letter-spacing="1">
-    ${cleanText}
+  <!-- Viral Bold Reel Title (Clean white text with drop shadow in top black canvas) -->
+  <text x="${centerX}" y="${startY}" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-weight="900" font-size="${fontSize}" fill="#FFFFFF" text-anchor="middle" letter-spacing="0.5" filter="url(#shadow)">
+    ${lines.map((line, idx) => `<tspan x="${centerX}" dy="${idx === 0 ? 0 : lineHeight}">${line}</tspan>`).join('\n    ')}
   </text>
 </svg>`;
 };
